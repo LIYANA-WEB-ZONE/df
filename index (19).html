@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventory Web System</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <style>
+    body { background-color: #f8f9fa; padding: 20px; font-family: sans-serif; }
+    .card { margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: none; border-radius: 10px; }
+    img.preview { max-width: 100%; height: auto; max-height: 200px; margin-top: 10px; display: block; border-radius: 5px; object-fit: cover; }
+    .loading { display: none; margin-left: 10px; }
+    .nav-tabs .nav-link { color: #495057; font-weight: bold; }
+    .nav-tabs .nav-link.active { background-color: #fff; color: #0d6efd; border-top: 3px solid #0d6efd; }
+    .date-header { background-color: #eef2f7; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+
+<div class="container text-center mb-4">
+  <h2 class="fw-bold text-dark">Inventory Management System</h2>
+  <p class="text-muted">ආයතනික උපකරණ පාලන පද්ධතිය</p>
+</div>
+
+<div class="container" style="max-width: 600px;">
+  <ul class="nav nav-tabs nav-fill mb-3" id="myTab" role="tablist">
+    <li class="nav-item"><button class="nav-link active" id="out-tab" data-bs-toggle="tab" data-bs-target="#out" type="button">නිකුත් කිරීම</button></li>
+    <li class="nav-item"><button class="nav-link" id="in-tab" data-bs-toggle="tab" data-bs-target="#in" type="button">භාරගැනීම</button></li>
+    <li class="nav-item"><button class="nav-link" id="search-tab" data-bs-toggle="tab" data-bs-target="#search" type="button">සෙවීම (History)</button></li>
+  </ul>
+
+  <div class="tab-content" id="myTabContent">
+    <div class="tab-pane fade show active" id="out">
+      <div class="card p-4">
+        <h4 class="mb-3 text-primary fw-bold">උපකරණයක් ලබා දීම</h4>
+        <form id="checkoutForm">
+          <div class="mb-3"><label class="form-label fw-bold">උපකරණයේ අංකය:</label><input type="text" id="outItemNum" class="form-control" placeholder="උදා: ITEM-001" required></div>
+          <div class="mb-3"><label class="form-label fw-bold">නිකුත් කල අයගේ නම:</label><input type="text" id="issuedBy" class="form-control" placeholder="දුන් කෙනාගේ නම" required></div>
+          <div class="mb-3"><label class="form-label fw-bold">රැගෙන ගිය අයගේ නම:</label><input type="text" id="takenBy" class="form-control" placeholder="රැගෙන ගිය කෙනාගේ නම" required></div>
+          <div class="mb-3"><label class="form-label fw-bold">රැගෙන ගිය ස්ථානය:</label><input type="text" id="location" class="form-control" placeholder="ගෙන යන ස්ථානය" required></div>
+          <div class="mb-3"><label class="form-label fw-bold">ඡායාරූපය (නොදැමුවද හැක):</label><input type="file" id="photo" class="form-control" accept="image/*"></div>
+          <button type="button" onclick="submitCheckOut()" class="btn btn-primary w-100 fw-bold">නිකුත් කරන්න <div class="spinner-border spinner-border-sm loading" id="loadOut" role="status"></div></button>
+        </form>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="in">
+      <div class="card p-4">
+        <h4 class="mb-3 text-success fw-bold">උපකරණයක් නැවත භාරගැනීම</h4>
+        <form id="checkinForm">
+          <div class="mb-3"><label class="form-label fw-bold">උපකරණයේ අංකය:</label><input type="text" id="inItemNum" class="form-control" placeholder="උදා: ITEM-001" required></div>
+          <div class="mb-3"><label class="form-label fw-bold">භාරගන්නා අයගේ නම:</label><input type="text" id="receivedBy" class="form-control" placeholder="භාරගන්නා නිලධාරියාගේ නම" required></div>
+          <button type="button" onclick="submitCheckIn()" class="btn btn-success w-100 fw-bold">භාරගන්න <div class="spinner-border spinner-border-sm loading" id="loadIn" role="status"></div></button>
+        </form>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="search">
+      <div class="card p-4">
+        <h4 class="mb-3 text-secondary fw-bold">පරණ විස්තර සෙවීම</h4>
+        <div class="input-group mb-3">
+          <input type="text" id="searchItemNum" class="form-control" placeholder="උපකරණ අංකය ඇතුළත් කරන්න">
+          <button onclick="searchItem()" class="btn btn-secondary fw-bold">සොයන්න <div class="spinner-border spinner-border-sm loading" id="loadSearch" role="status"></div></button>
+        </div>
+        <div id="searchResults" class="mt-3"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // ඔයා ලබාදුන් නිවැරදිම Google Web App URL එක මෙතනට ඇතුලත් කර ඇත
+  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyTvPn-drUfYBr662mi2vzROb3ZCFl3O1xM5hDoF-wfnccnVygQN3aCwxoOiD4Umz2Q_g/exec"; 
+
+  let photoBase64 = "";
+  document.getElementById('photo').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = function() { photoBase64 = reader.result; };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  function submitCheckOut() {
+    const data = {
+      action: "checkout",
+      itemNum: document.getElementById('outItemNum').value.trim(),
+      issuedBy: document.getElementById('issuedBy').value.trim(),
+      takenBy: document.getElementById('takenBy').value.trim(),
+      location: document.getElementById('location').value.trim(),
+      photoData: photoBase64
+    };
+    if(!data.itemNum || !data.issuedBy || !data.takenBy) return alert("කරුණාකර සියලු විස්තර පුරවන්න!");
+    
+    document.getElementById('loadOut').style.display = 'inline-block';
+    
+    fetch(WEB_APP_URL, { 
+      method: 'POST', 
+      mode: 'cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(data) 
+    })
+    .then(res => res.json())
+    .then(res => {
+      alert(res.message);
+      document.getElementById('checkoutForm').reset();
+      photoBase64 = "";
+      document.getElementById('loadOut').style.display = 'none';
+    }).catch(err => { 
+      alert("දත්ත ඇතුලත් කිරීමේදී ගැටලුවක් මතු විය! කරුණාකර මෙම HTML එක GitHub Pages වෙත දමා ටෙස්ට් කරන්න."); 
+      document.getElementById('loadOut').style.display = 'none'; 
+    });
+  }
+
+  function submitCheckIn() {
+    const data = {
+      action: "checkin",
+      itemNum: document.getElementById('inItemNum').value.trim(),
+      receivedBy: document.getElementById('receivedBy').value.trim()
+    };
+    if(!data.itemNum || !data.receivedBy) return alert("කරුණාකර විස්තර පුරවන්න!");
+    
+    document.getElementById('loadIn').style.display = 'inline-block';
+    
+    fetch(WEB_APP_URL, { 
+      method: 'POST', 
+      mode: 'cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(data) 
+    })
+    .then(res => res.json())
+    .then(res => {
+      alert(res.message);
+      document.getElementById('checkinForm').reset();
+      document.getElementById('loadIn').style.display = 'none';
+    }).catch(err => { 
+      alert("භාරගැනීමේදී ගැටලුවක් මතු විය!"); 
+      document.getElementById('loadIn').style.display = 'none'; 
+    });
+  }
+
+  function searchItem() {
+    const itemNum = document.getElementById('searchItemNum').value.trim();
+    if(!itemNum) return alert("කරුණාකර අංකයක් ඇතුළත් කරන්න!");
+    
+    document.getElementById('loadSearch').style.display = 'inline-block';
+    document.getElementById('searchResults').innerHTML = "";
+    
+    fetch(WEB_APP_URL, { 
+      method: 'POST', 
+      mode: 'cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({action: "search", itemNum: itemNum}) 
+    })
+    .then(res => res.json())
+    .then(response => {
+      let html = "";
+      let results = response.data;
+      if(!results || results.length === 0) { 
+        html = "<div class='alert alert-danger'>කිසිදු විස්තරයක් හමු නොවීය!</div>"; 
+      } else {
+        results.reverse().forEach(row => {
+          html += `
+            <div class="card p-3 mb-3 border-start border-5 ${row.status==='Issued'?'border-warning':'border-success'}">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="date-header text-dark">📅 නිකුත් කලේ: ${row.issueTime}</span>
+                <span class="badge ${row.status==='Issued'?'bg-warning text-dark':'bg-success'}">${row.status === 'Issued' ? 'පිටතට ගොස් ඇත' : 'භාරගෙන ඇත'}</span>
+              </div>
+              <p class="mb-1"><b>උපකරණ අංකය:</b> <span class="badge bg-secondary">${row.itemNum}</span></p>
+              <p class="mb-1"><b>රැගෙන ගියේ:</b> ${row.takenBy} <span class="text-muted">(නිකුත් කලේ: ${row.issuedBy})</span></p>
+              <p class="mb-1"><b>ගෙන ගිය ස්ථානය:</b> ${row.location}</p>
+              
+              ${row.receivedBy ? `
+                <hr class="my-2">
+                <p class="mb-1 text-success"><b>භාරගත් දිනය (Return Date & Time):</b> <span class="text-muted">${row.returnTime}</span></p>
+                <p class="mb-1 text-success"><b>භාරගත්තේ (Received By):</b> ${row.receivedBy}</p>
+                <p class="mb-1 text-success"><b>තත්වය (Status):</b> <span class="badge bg-success">Returned</span></p>
+              ` : ''}
+              
+              ${row.photo ? `
+                <div class="mt-2">
+                  <b class="d-block mb-1">ඡායාරූපය:</b>
+                  <a href="${row.photo}" target="_blank"><img src="${row.photo}" class="preview" alt="Photo"></a>
+                </div>` : '<p class="text-muted mt-2">ඡායාරූපයක් නොමැත</p>'}
+            </div>`;
+        });
+      }
+      document.getElementById('searchResults').innerHTML = html;
+      document.getElementById('loadSearch').style.display = 'none';
+    }).catch(err => { alert("දත්ත සෙවීමේදී ගැටලුවක් මතු විය!"); document.getElementById('loadSearch').style.display = 'none'; });
+  }
+</script>
+</body>
+</html>
